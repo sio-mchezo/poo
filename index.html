@@ -1,36 +1,613 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width">
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <title>🇬🇧💩</title>
-  <style type="text/css">
-    html, body {
-      font-family: monospace;  
-      color: white;
-      background: black;
-    }
-    #content {
-      padding: 10px;
-      display: block;
-      max-width: 400px;
-      margin: 0 auto;
-    }
-    .container {
-      height: 98vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 80px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Character + Lip Sync</title>
+    <style>
+        body {
+            background: #ccc url(img/flag.jpg);
+            background-size: cover;
+            background-blend-mode: multiply;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            position: relative;
+        }
+        canvas {
+            display: block;
+            width: 512px;
+            margin: 1em auto;
+            touch-action: none;
+        }
+        #buttonContainer {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+        .actionBtn {
+            padding: 15px 25px;
+            font-family: monospace;
+            cursor: pointer;
+            color: white;
+            border: none;
+            text-transform: uppercase;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            background: transparent;
+        }
+        .actionBtn:hover {
+            transform: scale(1.05);
+        }
+        .actionBtn:active {
+            transform: scale(0.95);
+        }
+        #shabubuBtn {
+            color: white;
+        }
+        #bounceBtn {
+            color: #ff6b6b;
+        }
+        #speechDiv {
+            position: absolute;
+            width: 80%;
+            top: 0;
+            left: 0;
+            z-index: 9;
+        }
+        #speechBubble {
+            font-size: 20px;
+            font-family: monospace;
+            cursor: pointer;
+            color: white;
+            padding: 12px;
+            justify-content: left;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div id="content" class="item">
-     <p>🇬🇧💩</p>
-   </div>
- </div>
+    <div id="speechDiv"><div id="speechBubble"></div></div>
+    <div id="buttonContainer">
+        <button id="shabubuBtn" class="actionBtn">speak</button>
+        <button id="bounceBtn" class="actionBtn">bounce</button>
+    </div>
+    <canvas id="canvas" width="512" height="512"></canvas>
+
+    <script src="js/rant.min.js"></script>
+    <script src="js/nipplejs.min.js"></script>
+    <script>
+
+        var speed = 50;
+        var botmsg = "";
+
+        function init() {
+            typereset();
+            setTimeout(function () {
+                writethis("sentence like this");
+            }, 100);
+        }
+
+        function writethis(argument) {
+            botmsg = argument;
+            typereset();
+            typeWriter();
+        }
+
+        function typereset() {
+            bubble.innerHTML = "";
+            k = 0;
+        }
+
+        function typeWriter() {
+            if (k < botmsg.length) {
+                bubble.innerHTML += botmsg.charAt(k);
+                k++;
+                setTimeout(typeWriter, speed);
+            }
+        }
+
+        function sendrant() {
+            var rant = require("rant");
+            var rants = [
+                "<firstname male> <verb like s> to <verb> <noun> with <pron poss male> pet <noun-animal>.",
+                "The <noun animal> <verb.ed> my <noun furniture> while I was <verb ing> <adv>."
+            ];
+            
+            var introsentence = rant(rants[Math.floor(Math.random() * rants.length)]);
+            speakContent(introsentence);
+            writethis(introsentence);
+        }
+
+        const bubble = document.getElementById('speechBubble');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let moving = false;
+        let moveDirection = 0;
+        let frameCounter = 0;
+        const FRAME_RATE = 8;
+
+        let bobPhase = 0;
+        const BOB_SPEED = 0.25;
+
+        const keys = { left: false, right: false };
+
+        let isSpeaking = false;
+        let speechTimeout = null;
+        let mouthFrame = 0;
+
+        let browsOffset = 0;
+        let browsTarget = 0;
+        let browsAnimating = false;
+        let browsTimer = 0;
+        let browRaiseCount = 0;
+
+        let eyeFrame = 0;
+        let blinkTimer = 0;
+        const EYE_SPRITE_WIDTH = 128;
+        const EYE_SPRITE_HEIGHT = 128;
+
+        let squashAmount = 0;
+        let squashPhase = 0;
+        const SQUASH_MAX = 0.05;
+        const SQUASH_IN_SPEED = 0.01;
+        const SQUASH_OUT_SPEED = 0.01;
+
+        let walkSquashAmount = 0;
+        const WALK_SQUASH_MAX = 0.04;
+
+        // Speech bounce variables
+        let speechBounceAmount = 0;
+        let speechBouncePhase = 0;
+        const SPEECH_BOUNCE_SPEED = 0.6;
+        const SPEECH_BOUNCE_MAX = 0.01;
+
+        const phonemeMap = {
+            " ": "0", ".": "0", ",": "0", "?": "0", "!": "0",
+            a: "1", A: "1", g: "1", G: "1", k: "1", K: "1", t: "1", T: "1",
+            i: "2", I: "2", y: "2", e: "2", E: "2", s: "2", S: "2",
+            z: "2", Z: "2", n: "2", N: "2", d: "2", D: "2",
+            l: "2", L: "2", h: "2", H: "2", c: "2", C: "2",
+            o: "3", O: "3", u: "3", U: "3", w: "3", q: "3",
+            m: "3", M: "3", p: "3", f: "3", F: "3", v: "3", V: "3",
+            r: "3", R: "3", b: "1", B: "1",
+            default: "0"
+        };
+
+        const IMAGES = {
+            body: 'img/body.png',
+            eye: 'img/eye.png',
+            mouth: 'img/mouths4.png',
+            brows: 'img/brows.png',
+            shadow: 'img/shadow.png'
+        };
+
+        const MOUTH_SPRITE_WIDTH = 128;
+        const MOUTH_SPRITE_HEIGHT = 128;
+
+        const FACE_OFFSETS = {
+            brows: { x: 128, y: 128, w: 256, h: 256 },
+            eyeL: { x: 138, y: 256, w: 128, h: 128 },
+            eyeR: { x: 246, y: 256, w: 128, h: 128 },
+            mouth: { x: 224, y: 288, w: 64, h: 64 }
+        };
+
+        const BODY_Y_OFFSET = 50;
+
+        function getLayers(mouthIdx, browsY, eyeIdx, squash) {
+            return [
+                { key: 'shadow', x: 0, y: 0, w: 512, h: 512 },
+                { key: 'body', x: 0, y: BODY_Y_OFFSET, w: 512, h: 512, squash: squash },
+                { key: 'brows', x: FACE_OFFSETS.brows.x, y: FACE_OFFSETS.brows.y + BODY_Y_OFFSET + browsY, w: FACE_OFFSETS.brows.w, h: FACE_OFFSETS.brows.h, isFace: true, squash: squash },
+                { key: 'eye', x: FACE_OFFSETS.eyeL.x, y: FACE_OFFSETS.eyeL.y + BODY_Y_OFFSET, w: FACE_OFFSETS.eyeL.w, h: FACE_OFFSETS.eyeL.h, sx: eyeIdx * EYE_SPRITE_WIDTH, sy: 0, sw: EYE_SPRITE_WIDTH, sh: EYE_SPRITE_HEIGHT, isFace: true, squash: squash },
+                { key: 'eye', x: FACE_OFFSETS.eyeR.x, y: FACE_OFFSETS.eyeR.y + BODY_Y_OFFSET, w: FACE_OFFSETS.eyeR.w, h: FACE_OFFSETS.eyeR.h, sx: eyeIdx * EYE_SPRITE_WIDTH, sy: 0, sw: EYE_SPRITE_WIDTH, sh: EYE_SPRITE_HEIGHT, isFace: true, squash: squash },
+                { key: 'mouth', x: FACE_OFFSETS.mouth.x, y: FACE_OFFSETS.mouth.y + BODY_Y_OFFSET, w: FACE_OFFSETS.mouth.w, h: FACE_OFFSETS.mouth.h, sx: mouthIdx * MOUTH_SPRITE_WIDTH, sy: 0, sw: MOUTH_SPRITE_WIDTH, sh: MOUTH_SPRITE_HEIGHT, isFace: true, squash: squash }
+            ];
+        }
+
+        let loaded = 0;
+        const totalImages = Object.keys(IMAGES).length;
+        const imageCache = {};
+
+        for (const [key, src] of Object.entries(IMAGES)) {
+            const img = new Image();
+            img.onload = () => {
+                loaded++;
+                if (loaded === totalImages) render();
+            };
+            img.onerror = () => {
+                console.error(`Failed to load: ${src}`);
+                loaded++;
+                if (loaded === totalImages) render();
+            };
+            img.src = src;
+            imageCache[key] = img;
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, 512, 512);
+
+            let totalSquash = 0;
+
+            // Walking squash
+            if (moving && moveDirection !== 0) {
+                walkSquashAmount = Math.sin(bobPhase) * WALK_SQUASH_MAX;
+                totalSquash += walkSquashAmount;
+            } else {
+                walkSquashAmount = 0;
+            }
+
+            // Speech bounce
+            if (isSpeaking) {
+                speechBouncePhase += SPEECH_BOUNCE_SPEED;
+                speechBounceAmount = Math.sin(speechBouncePhase) * SPEECH_BOUNCE_MAX;
+                totalSquash += speechBounceAmount;
+            } else {
+                speechBouncePhase = 0;
+                speechBounceAmount = 0;
+            }
+
+            // Button squash
+            totalSquash += squashAmount;
+
+            const layers = getLayers(mouthFrame, browsOffset, eyeFrame, totalSquash);
+
+            const shadowLayer = layers.find(l => l.key === 'shadow');
+            if (shadowLayer) {
+                const img = imageCache[shadowLayer.key];
+                if (img && img.complete && img.naturalWidth > 0) {
+                    ctx.drawImage(img, shadowLayer.x, shadowLayer.y, shadowLayer.w, shadowLayer.h);
+                }
+            }
+
+            const bodyLayer = layers.find(l => l.key === 'body');
+            if (bodyLayer) {
+                const img = imageCache[bodyLayer.key];
+                if (img && img.complete && img.naturalWidth > 0) {
+                    ctx.save();
+
+                    if (bodyLayer.squash !== 0) {
+                        const anchorX = bodyLayer.x + bodyLayer.w / 2;
+                        const anchorY = bodyLayer.y + bodyLayer.h;
+                        const scaleX = 1 + bodyLayer.squash;
+                        const scaleY = 1 - bodyLayer.squash;
+                        ctx.translate(anchorX, anchorY);
+                        ctx.scale(scaleX, scaleY);
+                        ctx.translate(-anchorX, -anchorY);
+                    }
+
+                    ctx.drawImage(img, bodyLayer.x, bodyLayer.y, bodyLayer.w, bodyLayer.h);
+                    ctx.restore();
+                }
+            }
+
+            const faceLayers = layers.filter(l => l.isFace === true);
+            if (faceLayers.length > 0) {
+                ctx.save();
+
+                if (faceLayers[0].squash !== 0) {
+                    const anchorX = 256;
+                    const anchorY = 512;
+                    const scaleX = 1 + faceLayers[0].squash;
+                    const scaleY = 1 - faceLayers[0].squash;
+                    ctx.translate(anchorX, anchorY);
+                    ctx.scale(scaleX, scaleY);
+                    ctx.translate(-anchorX, -anchorY);
+                }
+
+                for (const layer of faceLayers) {
+                    const img = imageCache[layer.key];
+                    if (img && img.complete && img.naturalWidth > 0) {
+                        if (layer.sx !== undefined) {
+                            ctx.drawImage(img, layer.sx, layer.sy, layer.sw, layer.sh, layer.x, layer.y, layer.w, layer.h);
+                        } else {
+                            ctx.drawImage(img, layer.x, layer.y, layer.w, layer.h);
+                        }
+                    }
+                }
+                ctx.restore();
+            }
+        }
+
+        function setupKeyboardControls() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    keys.left = true;
+                    moving = true;
+                    moveDirection = -1;
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    keys.right = true;
+                    moving = true;
+                    moveDirection = 1;
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    keys.left = false;
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    keys.right = false;
+                }
+
+                if (!keys.left && !keys.right) {
+                    moving = false;
+                    moveDirection = 0;
+                    frameCounter = 0;
+                    bobPhase = 0;
+                    walkSquashAmount = 0;
+                    render();
+                }
+            });
+        }
+
+        function setupJoystick() {
+            if (typeof nipplejs !== 'undefined') {
+                const joystick = nipplejs.create({ dataOnly: true });
+
+                joystick.on('move', (evt, data) => {
+                    if (!data.force || data.force < 0.1) {
+                        moving = false;
+                        return;
+                    }
+                    moving = true;
+                    const vx = Math.cos(data.angle.radian);
+                    if (Math.abs(vx) > 0.2) {
+                        moveDirection = vx > 0 ? 1 : -1;
+                    }
+                });
+
+                joystick.on('end', () => {
+                    moving = false;
+                    moveDirection = 0;
+                    frameCounter = 0;
+                    bobPhase = 0;
+                    walkSquashAmount = 0;
+                    render();
+                });
+            } else {
+                console.warn('nipplejs not loaded');
+                setupKeyboardControls();
+            }
+        }
+
+        function triggerBrowsAnimation(count = 1) {
+            browsAnimating = true;
+            browsTimer = 0;
+            browsTarget = -10;
+            browRaiseCount = count;
+        }
+
+        function triggerSquash() {
+            if (squashPhase === 0) {
+                squashPhase = 1;
+                squashAmount = 0;
+            }
+        }
+
+        function updateSquash() {
+            let changed = false;
+
+            if (squashPhase === 1) {
+                squashAmount += SQUASH_IN_SPEED;
+                if (squashAmount >= SQUASH_MAX) {
+                    squashAmount = SQUASH_MAX;
+                    squashPhase = 2;
+                }
+                changed = true;
+            } else if (squashPhase === 2) {
+                squashAmount -= SQUASH_OUT_SPEED;
+                if (squashAmount <= 0) {
+                    squashAmount = 0;
+                    squashPhase = 0;
+                }
+                changed = true;
+            }
+
+            if (changed) {
+                render();
+            }
+        }
+
+        function updateBrows() {
+            if (browsAnimating) {
+                browsTimer++;
+                if (browsTimer < 6) {
+                    browsOffset = browsTarget * (browsTimer / 6);
+                } else if (browsTimer < 12) {
+                    browsOffset = browsTarget * (1 - (browsTimer - 6) / 6);
+                } else {
+                    browsOffset = 0;
+                    browsAnimating = false;
+                    browsTimer = 0;
+
+                    if (browRaiseCount > 1) {
+                        browRaiseCount--;
+                        setTimeout(() => {
+                            triggerBrowsAnimation(browRaiseCount);
+                        }, 70);
+                    }
+                }
+                render();
+            }
+        }
+
+        function updateBlink() {
+            if (!isSpeaking) {
+                blinkTimer++;
+                const blinkInterval = 180 + Math.floor(Math.random() * 120);
+                if (blinkTimer >= blinkInterval) {
+                    eyeFrame = 1;
+                    render();
+                    setTimeout(() => {
+                        eyeFrame = 0;
+                        render();
+                    }, 150);
+                    blinkTimer = 0;
+                }
+            }
+        }
+
+        function speakContent(text) {
+            if (isSpeaking) return;
+
+            isSpeaking = true;
+            triggerSquash();
+            mouthSync(text);
+
+            const synth = window.speechSynthesis;
+            const utterThis = new SpeechSynthesisUtterance(text);
+            utterThis.pitch = 1.2;
+            utterThis.rate = 0.85;
+            utterThis.volume = 0.9;
+
+            const voices = synth.getVoices();
+            const ukVoice = voices.find(voice => voice.lang.includes("en-GB"));
+            if (ukVoice) {
+                utterThis.voice = ukVoice;
+            }
+
+            synth.speak(utterThis);
+
+            utterThis.onend = () => {
+                isSpeaking = false;
+                clearTimeout(speechTimeout);
+                mouthFrame = 0;
+                speechBouncePhase = 0;
+                speechBounceAmount = 0;
+                triggerBrowsAnimation();
+                render();
+            };
+
+            utterThis.onerror = () => {
+                isSpeaking = false;
+                clearTimeout(speechTimeout);
+                mouthFrame = 0;
+                speechBouncePhase = 0;
+                speechBounceAmount = 0;
+                render();
+            };
+        }
+
+        function mouthSync(text) {
+            if (window.speechSynthesis.getVoices().length === 0) {
+                window.speechSynthesis.getVoices();
+            }
+
+            let totalDelay = 0;
+            const pauseDuration = 150;
+
+            for (let i = 0, len = text.length; i < len; i++) {
+                const char = text[i];
+                const isPunctuation = char === '.' || char === ',' || char === '?' || char === '!';
+                const extraDelay = isPunctuation ? pauseDuration : 0;
+
+                setTimeout(((i, char) => {
+                    return () => {
+                        const frameIndex = phonemeMap[char.toLowerCase()] || phonemeMap.default;
+                        mouthFrame = parseInt(frameIndex);
+                        render();
+                    };
+                })(i, char), totalDelay);
+
+                totalDelay += 60;
+                if (isPunctuation) {
+                    totalDelay += pauseDuration;
+                }
+            }
+
+            speechTimeout = setTimeout(() => {
+                if (isSpeaking) {
+                    mouthFrame = 0;
+                    render();
+                }
+            }, totalDelay + 50);
+        }
+
+        function updateAnimation() {
+            if (moving && moveDirection !== 0) {
+                bobPhase += BOB_SPEED;
+                frameCounter++;
+                if (frameCounter >= FRAME_RATE) {
+                    frameCounter = 0;
+                    render();
+                }
+            }
+            updateSquash();
+            updateBrows();
+            updateBlink();
+        }
+
+        function gameLoop() {
+            updateAnimation();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function init() {
+            setupKeyboardControls();
+
+            if (typeof nipplejs !== 'undefined') {
+                setupJoystick();
+            }
+
+            const shabubuBtn = document.getElementById('shabubuBtn');
+            shabubuBtn.addEventListener('click', () => {
+                sendrant();
+            });
+
+            const bounceBtn = document.getElementById('bounceBtn');
+            bounceBtn.addEventListener('click', () => {
+                triggerSquash();
+                setTimeout(() => {
+                    triggerBrowsAnimation(2);
+                }, 300);
+            });
+
+            if (window.speechSynthesis) {
+                window.speechSynthesis.getVoices();
+                window.speechSynthesis.onvoiceschanged = () => {
+                    window.speechSynthesis.getVoices();
+                };
+            }
+
+            gameLoop();
+
+            const checkLoaded = setInterval(() => {
+                if (loaded === totalImages) {
+                    clearInterval(checkLoaded);
+                    render();
+                }
+            }, 100);
+        }
+
+        setTimeout(() => {
+            if (loaded < totalImages) {
+                let allCached = true;
+                for (const img of Object.values(imageCache)) {
+                    if (!img.complete || img.naturalWidth === 0) {
+                        allCached = false;
+                        break;
+                    }
+                }
+                if (allCached) {
+                    loaded = totalImages;
+                    render();
+                }
+            }
+        }, 1000);
+
+        init();
+    </script>
 </body>
 </html>
