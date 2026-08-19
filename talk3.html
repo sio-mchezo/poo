@@ -178,6 +178,7 @@
         cameraRig.add(camera);
         scene.add(cameraRig);
         camera.position.set(0, 1, 6); 
+        camera.lookAt(0,0,0)
 
         // lights
         scene.add(new THREE.AmbientLight(0xffffff, 1));
@@ -260,6 +261,9 @@
         const faceGroup = new THREE.Group();
         faceGroup.position.set(0, 0, 0);
         scene.add(faceGroup);
+
+        const pivotGroup = new THREE.Group();
+        faceGroup.add(pivotGroup);
 
         window.doSquashBounce = () => {
             new TWEEN.Tween(faceGroup.scale)
@@ -468,12 +472,13 @@
                 plane.rotation.set(-0.35, 0, 0);
                 plane.renderOrder = 1;
                 plane.frustumCulled = false;
+                pivotGroup.add(plane)
 
                 if (targetBone) {
-                    targetBone.add(plane);
+                    targetBone.add(pivotGroup);
                     faceBone = targetBone;
                 } else {
-                    fbx.add(plane);
+                    fbx.add(pivotGroup);
                 }
 
                 const bonePositions = [];
@@ -587,7 +592,29 @@
                 });
             }
             
-        
+
+            // Face rotation based on movement direction
+            if (pivotGroup) {
+                // Target rotation based on velocity direction
+                const MAX_FACE_ROTATION = -Math.PI / 6; // 30 degrees in radians
+                let targetPivotRotation = 0;
+                
+                if (Math.abs(velocity) > 0.1) {
+                    // Normalize velocity to -1 to 1 range and map to rotation
+                    const normalizedVelocity = Math.max(-1, Math.min(1, velocity / MAX_SPEED));
+                    targetPivotRotation = -normalizedVelocity * MAX_FACE_ROTATION;
+                }
+                
+                // Smoothly interpolate rotation
+                const rotationSmoothing = 8 * delta; // Adjust for faster/slower response
+                pivotGroup.rotation.y += (targetPivotRotation - pivotGroup.rotation.y) * Math.min(1, rotationSmoothing);
+                
+                // Snap back to center when stopped
+                if (Math.abs(velocity) < 0.05) {
+                    pivotGroup.rotation.y *= (1 - Math.min(1, 10 * delta));
+                }
+            }
+
             // if (Math.abs(velocity) < 0.05) {
             //     faceGroup.rotation.z *= (1 - Math.min(1, 8 * delta));
             // }
