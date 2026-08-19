@@ -320,17 +320,11 @@
                 // Add this function before the speak button handler
         function getUKVoice() {
             const voices = speechSynthesis.getVoices();
-            
+            console.log(voices)
             const preferredVoices = [
-                'Google UK English Female',
                 'Google UK English Male',
                 'Daniel',
-                'Kate',
-                'Serena',
-                'Microsoft Libby Online (Natural) - English (United Kingdom)',
                 'Microsoft Ryan Online (Natural) - English (United Kingdom)',
-                'Microsoft Sonia Online (Natural) - English (United Kingdom)',
-                'Microsoft Hayley Online (Natural) - English (United Kingdom)'
             ];
             
             for (const preferredName of preferredVoices) {
@@ -446,7 +440,7 @@
                 browsOffset = Math.sin(time * 1.2) * 3;
                 renderFace();
             }
-            eyeFrame = Math.sin(time * 2) > 0.8 ? 1 : 0;
+            eyeFrame = Math.sin(time * 2) > 0.95 ? 1 : 0;
             TWEEN.update();
             controls.update();
             renderer.render(scene, camera);
