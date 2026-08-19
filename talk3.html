@@ -10,26 +10,21 @@
         #hud {
             position: absolute;
             bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            display: flex;
-            gap: 10px;
+            left: 30px;
         }
         #hud button {
             padding: 10px 20px;
-            font-size: 18px;
-            border-radius: 8px;
+            font-size: 22px;
             border: none;
-            background: #f0e68c;
-            color: #2d2d2d;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
             cursor: pointer;
-            font-weight: bold;
+            font-family: monospace;
             transition: all 0.2s;
         }
         #hud button:hover:not(:disabled) {
-            transform: scale(1.05);
-            background: #ffd700;
+            color: #fff000;
+            background: rgba(0, 0, 0, 0.5);
         }
         #hud button:disabled {
             opacity: 0.5;
@@ -104,6 +99,7 @@
         let joystickActive = false;
         let joystickForce = 0;
         let joystickVelocityX = 0;
+        let joystickVelocityY = 0;
 
         function setupJoystick() {
             if (typeof nipplejs !== 'undefined') {
@@ -117,6 +113,7 @@
                         joystickActive = true;
                         joystickForce = data.force;
                         joystickVelocityX = data.vector.x * JOYSTICK_MAX_SPEED;
+                        joystickVelocityY = data.vector.y * JOYSTICK_MAX_SPEED;
                     }
                 });
 
@@ -124,6 +121,7 @@
                     joystickActive = false;
                     joystickForce = 0;
                     joystickVelocityX = 0;
+                    joystickVelocityY = 0;
                 });
             }
         }
@@ -524,9 +522,9 @@
         // Movement variables
         let velocity = 0;
         let targetVelocity = 0;
-        const MAX_SPEED = 3;
-        const ACCELERATION = 15;
-        const FRICTION = 14;
+        const MAX_SPEED = 0.2;
+        const ACCELERATION = 5;
+        const FRICTION = 25;
         
         const SPRING_STIFFNESS = 80;
         const SPRING_DAMPING = 8;
@@ -608,6 +606,8 @@
                 // Smoothly interpolate rotation
                 const rotationSmoothing = 8 * delta; // Adjust for faster/slower response
                 pivotGroup.rotation.y += (targetPivotRotation - pivotGroup.rotation.y) * Math.min(1, rotationSmoothing);
+                //
+                pivotGroup.rotation.x += ((-joystickVelocityY*0.05) - pivotGroup.rotation.x) * Math.min(1, rotationSmoothing);
                 
                 // Snap back to center when stopped
                 if (Math.abs(velocity) < 0.05) {
