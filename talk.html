@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name=viewport content='width=700'>
+    <meta charset="utf-8">
+
     <title>UK Poo</title>
+
     <style>
         body { 
             margin: 0; 
@@ -16,6 +20,9 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 10;
+        }
+        #hud button {
+            padding: 10px;
         }
         #subtitles {
             position: absolute;
@@ -310,6 +317,82 @@
             lipSyncTimeouts = [];
         }
 
+                // Add this function before the speak button handler
+        function getUKVoice() {
+            const voices = speechSynthesis.getVoices();
+            
+            const preferredVoices = [
+                'Google UK English Female',
+                'Google UK English Male',
+                'Daniel',
+                'Kate',
+                'Serena',
+                'Microsoft Libby Online (Natural) - English (United Kingdom)',
+                'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+                'Microsoft Sonia Online (Natural) - English (United Kingdom)',
+                'Microsoft Hayley Online (Natural) - English (United Kingdom)'
+            ];
+            
+            for (const preferredName of preferredVoices) {
+                const voice = voices.find(v => v.name === preferredName);
+                if (voice) return voice;
+            }
+            
+            const ukVoice = voices.find(v => 
+                v.lang === 'en-GB' || 
+                v.lang === 'en_GB' || 
+                v.lang.toLowerCase().includes('en-gb') || 
+                v.lang.toLowerCase().includes('en_gb')
+            );
+            if (ukVoice) return ukVoice;
+            
+            return voices.find(v => v.lang.toLowerCase().includes('en')) || voices[0];
+        }
+
+        speakBtn.addEventListener('click', () => {
+            if (isSpeaking) return;
+            
+            doSquashBounce();
+            speechSynthesis.cancel();
+            
+            const rant = generateRant();
+            const words = rant.split(/\s+/);
+            
+            updateSubtitles('');
+            mouthFrame = 0;
+            renderFace();
+            clearTimeouts();
+
+            const utterance = new SpeechSynthesisUtterance(rant);
+            utterance.voice = getUKVoice();
+            utterance.rate = 0.85;
+            utterance.pitch = 1.1;
+            
+            isSpeaking = true;
+            speakBtn.disabled = true;
+
+            utterance.onboundary = (event) => {
+                if (event.name === 'word') {
+                    const wordCount = rant.substring(0, event.charIndex).split(/\s+/).length - 1;
+                    if (wordCount >= 0 && wordCount < words.length) {
+                        updateSubtitles(words[wordCount]);
+                        lipSyncWord(words[wordCount]);
+                    }
+                }
+            };
+
+            utterance.onend = utterance.onerror = () => {
+                updateSubtitles('');
+                mouthFrame = 0;
+                renderFace();
+                isSpeaking = false;
+                speakBtn.disabled = false;
+                clearTimeouts();
+            };
+
+            speechSynthesis.speak(utterance);
+        });
+
         speakBtn.addEventListener('click', () => {
             if (isSpeaking) return;
             
@@ -376,8 +459,11 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        // Ensure voices are loaded
         speechSynthesis.getVoices();
-        speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+        speechSynthesis.onvoiceschanged = () => {
+            speechSynthesis.getVoices();
+        };
 
         animate();
     </script>
