@@ -73,7 +73,8 @@
 
     <script src="js/rant.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.0/tween.umd.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
+
     <script type="importmap">
         {
             "imports": {
@@ -98,10 +99,69 @@
             return rant(rants[Math.floor(Math.random() * rants.length)]);
         }
 
+        // Joystick variables
+        let joystick = null;
+        let joystickActive = false;
+        let joystickForce = 0;
+        let joystickVelocityX = 0;
+
+        function setupJoystick() {
+            if (typeof nipplejs !== 'undefined') {
+                joystick = nipplejs.create({
+                    zone: document.body,
+                    dataOnly: true
+                });
+
+                joystick.on('move', (evt, data) => {
+                    if (data.force && data.force > 0.1) {
+                        joystickActive = true;
+                        joystickForce = data.force;
+                        joystickVelocityX = data.vector.x * JOYSTICK_MAX_SPEED;
+                    }
+                });
+
+                joystick.on('end', () => {
+                    joystickActive = false;
+                    joystickForce = 0;
+                    joystickVelocityX = 0;
+                });
+            }
+        }
+
+        const JOYSTICK_MAX_SPEED = 3;
+        setupJoystick();
+
+        // Camera rotation variables
+        let targetCameraRotationX = 0;
+        let targetCameraRotationY = 0;
+        let currentCameraRotationX = 0;
+        let currentCameraRotationY = 0;
+        const CAMERA_SMOOTHING = 0.08; // Lower = smoother but slower
+        const CAMERA_MAX_ROTATION = 0.4; // Maximum rotation in radians
+
+        function handlePointerMove(clientX, clientY) {
+            // Convert to normalized coordinates (-1 to 1)
+            const normalizedX = (clientX / window.innerWidth) * 2 - 1;
+            const normalizedY = -(clientY / window.innerHeight) * 2 + 1;
+            
+            // Map to camera rotation with limits
+            targetCameraRotationY = -normalizedX * CAMERA_MAX_ROTATION;
+            targetCameraRotationX = normalizedY * CAMERA_MAX_ROTATION * 0.6;
+        }
+        
+        document.addEventListener('mousemove', (event) => {
+            handlePointerMove(event.clientX, event.clientY);
+        });
+        
+        document.addEventListener('touchmove', (event) => {
+            if (event.touches.length > 0) {
+                handlePointerMove(event.touches[0].clientX, event.touches[0].clientY);
+            }
+        }, { passive: true });
+
         // scene
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.5, 5);
         const renderer = new THREE.WebGLRenderer({ 
             alpha: true,
             antialias: true
@@ -113,15 +173,13 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // controls
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 0.8, 0);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
-        controls.maxDistance = 20;
-        controls.minDistance = 5;
-        controls.update();
+        // rig
+        const cameraRig = new THREE.Group();
+        cameraRig.add(camera);
+        scene.add(cameraRig);
+        camera.position.set(0, 1, 6); 
 
+        // lights
         scene.add(new THREE.AmbientLight(0xffffff, 1));
         const dirLight = new THREE.DirectionalLight(0xffffff, 1);
         dirLight.position.set(1, 2, 3);
@@ -224,7 +282,7 @@
             color: 0x8e897c,
             map: ptex,
         });
-        const pave = new THREE.Mesh(new THREE.CircleGeometry(10, 40), paveMat);
+        const pave = new THREE.Mesh(new THREE.CircleGeometry(6, 40), paveMat);
         pave.rotation.set(-Math.PI / 2, 0, 0);
         pave.receiveShadow = true;
         scene.add(pave);
@@ -418,7 +476,6 @@
                     fbx.add(plane);
                 }
 
-                // Set up spring physics for bones
                 const bonePositions = [];
                 
                 fbx.traverse((child) => {
@@ -459,8 +516,7 @@
 
         loadModel();
 
-        // Keyboard controls
-        const keys = {};
+        // Movement variables
         let velocity = 0;
         let targetVelocity = 0;
         const MAX_SPEED = 3;
@@ -470,7 +526,75 @@
         const SPRING_STIFFNESS = 80;
         const SPRING_DAMPING = 8;
         const MAX_BONE_ROTATION = 0.1;
+
+        function updateMovement(delta) {
+            if (joystickActive) {
+                targetVelocity = joystickVelocityX;
+            } else {
+                if (keys['arrowleft'] || keys['a']) {
+                    targetVelocity = -MAX_SPEED;
+                } else if (keys['arrowright'] || keys['d']) {
+                    targetVelocity = MAX_SPEED;
+                } else {
+                    targetVelocity = 0;
+                }
+            }
+            
+            if (targetVelocity !== 0) {
+                velocity += (targetVelocity - velocity) * Math.min(1, ACCELERATION * delta);
+            } else {
+                velocity += (0 - velocity) * Math.min(1, FRICTION * delta);
+            }
+            
+            faceGroup.position.x += velocity * delta;
+            faceGroup.position.x = Math.max(-5, Math.min(5, faceGroup.position.x));
+            
+            // rig
+            cameraRig.position.x = faceGroup.position.x;
+            
+            // rig rotation
+            cameraRig.rotation.x = currentCameraRotationX;
+            cameraRig.rotation.y = currentCameraRotationY;
+
+
+            if (boneSprings.length > 0) {
+                boneSprings.forEach((spring) => {
+                    const heightFactor = spring.heightFactor;
+                    
+                    const targetZ = velocity * 0.15 * heightFactor;
+                    const targetX = Math.abs(velocity) * 0.08 * heightFactor;
+                    
+                    const forceZ = (targetZ - spring.positionZ) * SPRING_STIFFNESS;
+                    const forceX = (targetX - spring.positionX) * SPRING_STIFFNESS;
+                    
+                    const dampingZ = spring.velocityZ * SPRING_DAMPING;
+                    const dampingX = spring.velocityX * SPRING_DAMPING;
+                    
+                    const accelerationZ = forceZ - dampingZ;
+                    const accelerationX = forceX - dampingX;
+                    
+                    spring.velocityZ += accelerationZ * delta;
+                    spring.velocityX += accelerationX * delta;
+                    
+                    spring.positionZ += spring.velocityZ * delta;
+                    spring.positionX += spring.velocityX * delta;
+                    
+                    spring.positionZ = Math.max(-MAX_BONE_ROTATION, Math.min(MAX_BONE_ROTATION, spring.positionZ));
+                    spring.positionX = Math.max(-MAX_BONE_ROTATION * 0.5, Math.min(MAX_BONE_ROTATION * 0.5, spring.positionX));
+                    
+                    spring.bone.rotation.z = spring.originalRotation.z + spring.positionZ;
+                    spring.bone.rotation.x = spring.originalRotation.x + spring.positionX;
+                });
+            }
+            
         
+            // if (Math.abs(velocity) < 0.05) {
+            //     faceGroup.rotation.z *= (1 - Math.min(1, 8 * delta));
+            // }
+        }
+
+        // Keyboard
+        const keys = {};
         window.addEventListener('keydown', (e) => {
             keys[e.key.toLowerCase()] = true;
             if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -481,76 +605,6 @@
         window.addEventListener('keyup', (e) => {
             keys[e.key.toLowerCase()] = false;
         });
-
-        function updateMovement(delta) {
-            // Calculate target velocity
-            if (keys['arrowleft'] || keys['a']) {
-                targetVelocity = -MAX_SPEED;
-            } else if (keys['arrowright'] || keys['d']) {
-                targetVelocity = MAX_SPEED;
-            } else {
-                targetVelocity = 0;
-            }
-            
-            // Smooth acceleration
-            if (targetVelocity !== 0) {
-                velocity += (targetVelocity - velocity) * Math.min(1, ACCELERATION * delta);
-            } else {
-                velocity += (0 - velocity) * Math.min(1, FRICTION * delta);
-            }
-            
-            // Apply movement
-            faceGroup.position.x += velocity * delta;
-            faceGroup.position.x = Math.max(-5, Math.min(5, faceGroup.position.x));
-            
-            // Spring physics for bones
-            if (boneSprings.length > 0) {
-                boneSprings.forEach((spring) => {
-                    const heightFactor = spring.heightFactor;
-                    
-                    // Correct direction: positive velocity = lean forward (negative Z rotation)
-                    // The bones should drag BEHIND the movement
-                    const targetZ = velocity * 0.15 * heightFactor; // Positive velocity = negative Z (lean back)
-                    const targetX = Math.abs(velocity) * 0.08 * heightFactor; // Slight forward lean
-                    
-                    // Spring force (Hooke's law)
-                    const forceZ = (targetZ - spring.positionZ) * SPRING_STIFFNESS;
-                    const forceX = (targetX - spring.positionX) * SPRING_STIFFNESS;
-                    
-                    // Damping force
-                    const dampingZ = spring.velocityZ * SPRING_DAMPING;
-                    const dampingX = spring.velocityX * SPRING_DAMPING;
-                    
-                    // Acceleration = Force - Damping
-                    const accelerationZ = forceZ - dampingZ;
-                    const accelerationX = forceX - dampingX;
-                    
-                    // Update velocity
-                    spring.velocityZ += accelerationZ * delta;
-                    spring.velocityX += accelerationX * delta;
-                    
-                    // Update position
-                    spring.positionZ += spring.velocityZ * delta;
-                    spring.positionX += spring.velocityX * delta;
-                    
-                    // Clamp rotation to prevent excessive bending
-                    spring.positionZ = Math.max(-MAX_BONE_ROTATION, Math.min(MAX_BONE_ROTATION, spring.positionZ));
-                    spring.positionX = Math.max(-MAX_BONE_ROTATION * 0.5, Math.min(MAX_BONE_ROTATION * 0.5, spring.positionX));
-                    
-                    // Apply to bone
-                    spring.bone.rotation.z = spring.originalRotation.z + spring.positionZ;
-                    spring.bone.rotation.x = spring.originalRotation.x + spring.positionX;
-                });
-            }
-            
-            // Tilt the whole group (subtle)
-            const targetTilt = -velocity * 0.05;
-            faceGroup.rotation.z += (targetTilt - faceGroup.rotation.z) * Math.min(1, 8 * delta);
-            
-            if (Math.abs(velocity) < 0.05) {
-                faceGroup.rotation.z *= (1 - Math.min(1, 8 * delta));
-            }
-        }
 
         let clock = new THREE.Clock();
         let elapsedTime = 0;
@@ -567,10 +621,19 @@
 
             eyeFrame = Math.sin(time * 3) > 0.9 ? 1 : 0;
 
-            updateMovement(delta);
+            // Smooth camera rotation
+            currentCameraRotationX += (targetCameraRotationX - currentCameraRotationX) * CAMERA_SMOOTHING;
+            currentCameraRotationY += (targetCameraRotationY - currentCameraRotationY) * CAMERA_SMOOTHING;
+            
+            // Apply rotation to scene (or camera group)
+            scene.rotation.x = currentCameraRotationX;
+            scene.rotation.y = currentCameraRotationY;
+            
+            // camera 
+            camera.position.y = Math.max(1.5, camera.position.y);
 
+            updateMovement(delta);
             TWEEN.update();
-            controls.update();
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         }
