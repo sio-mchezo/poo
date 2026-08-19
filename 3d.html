@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>UK Poo</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #333; }
+        canvas { display: block; }
+        button {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="window.doSquashBounce()">bounce</button>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.0/tween.umd.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.5, 7);
+
+        const renderer = new THREE.WebGLRenderer({
+            antialias: false, alpha: true, transparent: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.5, 0);
+        controls.enablePan = false;
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 20;
+        controls.minDistance = 5;
+        controls.update();
+
+        const ambientLight = new THREE.AmbientLight(0xffffff);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(1, 2, 3);
+        scene.add(dirLight);
+        const backLight = new THREE.DirectionalLight(0x88aaff, 0.4);
+        backLight.position.set(-1, 0.5, -2);
+        scene.add(backLight);
+
+        const textureLoader = new THREE.TextureLoader();
+        const eyeTex = textureLoader.load('images/eye.png');
+        const mouthTex = textureLoader.load('images/mouths4.png');
+        const browsTex = textureLoader.load('images/brows.png');
+        const bgTex = textureLoader.load('images/poo.png');
+        const poobumpTex = textureLoader.load('images/poobmp.png');
+        const ptex = textureLoader.load('images/flag2.jpg');
+        const shdwtex = textureLoader.load('images/shdw.png');
+        ptex.magFilter = THREE.NearestFilter;
+        ptex.minFilter = THREE.NearestFilter;
+
+        const faceCanvas = document.createElement('canvas');
+        faceCanvas.width = 512;
+        faceCanvas.height = 512;
+        const ctx = faceCanvas.getContext('2d');
+
+        const FACE_OFFSETS = {
+            brows: { x: 128, y: 128, w: 256, h: 256 },
+            eyeL: { x: 138, y: 256, w: 128, h: 128 },
+            eyeR: { x: 246, y: 256, w: 128, h: 128 },
+            mouth: { x: 224, y: 288, w: 64, h: 64 }
+        };
+
+        const BODY_Y_OFFSET = 50;
+        const EYE_SPRITE_WIDTH = 128;
+        const MOUTH_SPRITE_WIDTH = 128;
+
+        function drawFace(mouthIdx = 0, eyeIdx = 0, browsY = 0) {
+            ctx.clearRect(0, 0, 512, 512);
+            if (browsTex.image) {
+                const bx = FACE_OFFSETS.brows.x;
+                const by = FACE_OFFSETS.brows.y + BODY_Y_OFFSET + browsY;
+                ctx.drawImage(browsTex.image, bx, by, FACE_OFFSETS.brows.w, FACE_OFFSETS.brows.h);
+            }
+            if (eyeTex.image) {
+                const sxL = eyeIdx * EYE_SPRITE_WIDTH;
+                ctx.drawImage(eyeTex.image, sxL, 0, EYE_SPRITE_WIDTH, 128,
+                    FACE_OFFSETS.eyeL.x, FACE_OFFSETS.eyeL.y + BODY_Y_OFFSET,
+                    FACE_OFFSETS.eyeL.w, FACE_OFFSETS.eyeL.h);
+                ctx.drawImage(eyeTex.image, sxL, 0, EYE_SPRITE_WIDTH, 128,
+                    FACE_OFFSETS.eyeR.x, FACE_OFFSETS.eyeR.y + BODY_Y_OFFSET,
+                    FACE_OFFSETS.eyeR.w, FACE_OFFSETS.eyeR.h);
+            }
+            if (mouthTex.image) {
+                const sxM = mouthIdx * MOUTH_SPRITE_WIDTH;
+                ctx.drawImage(mouthTex.image, sxM, 0, MOUTH_SPRITE_WIDTH, 128,
+                    FACE_OFFSETS.mouth.x, FACE_OFFSETS.mouth.y + BODY_Y_OFFSET,
+                    FACE_OFFSETS.mouth.w, FACE_OFFSETS.mouth.h);
+            }
+        }
+        drawFace(0, 0, 0);
+        const faceTexture = new THREE.CanvasTexture(faceCanvas);
+        faceTexture.minFilter = THREE.LinearFilter;
+        faceTexture.magFilter = THREE.LinearFilter;
+
+        const faceGroup = new THREE.Group();
+        faceGroup.position.set(0, 1, 0);
+        scene.add(faceGroup);
+
+        window.doSquashBounce = function() {
+            new TWEEN.Tween(faceGroup.scale)
+                .to({ x: 1.05, y: 0.95, z: 1.05 }, 200)
+                .easing(TWEEN.Easing.Quadratic.In)
+                .start();
+
+            setTimeout(() => {
+                new TWEEN.Tween(faceGroup.position)
+                    .to({ y: 1.05 }, 100)
+                    .easing(TWEEN.Easing.Quadratic.Out)
+                    .start();
+                
+                new TWEEN.Tween(faceGroup.rotation)
+                    .to({ x: -0.1 }, 200)
+                    .easing(TWEEN.Easing.Quadratic.Out)
+                    .start();
+
+                new TWEEN.Tween(faceGroup.scale)
+                    .to({ x: 0.95, y: 1.05, z: 0.95 }, 100)
+                    .easing(TWEEN.Easing.Quadratic.Out)
+                    .start();
+
+                setTimeout(() => {
+                    new TWEEN.Tween(faceGroup.position)
+                        .to({ y: 1 }, 100)
+                        .easing(TWEEN.Easing.Quadratic.InOut)
+                        .start();
+                
+                    new TWEEN.Tween(faceGroup.rotation)
+                        .to({ x: 0.0 }, 300)
+                        .easing(TWEEN.Easing.Quadratic.Out)
+                        .start();
+
+                    new TWEEN.Tween(faceGroup.scale)
+                        .to({ x: 1, y: 1, z: 1 }, 200)
+                        .easing(TWEEN.Easing.Quadratic.InOut)
+                        .start();
+                }, 100);
+            }, 200);
+        };
+
+        const loader = new GLTFLoader();
+        let outlineMesh = null;
+        let mainModel = null;
+
+        loader.load('assets/model.glb', (gltf) => {
+            const model = gltf.scene;
+            model.position.y = 0;
+            mainModel = model;
+
+            model.traverse(child => {
+                if (child.isMesh && child.material) {
+                    child.material = new THREE.MeshLambertMaterial({
+                        map: bgTex,
+                        side: THREE.FrontSide
+                    });
+                    child.material.map.magFilter = THREE.NearestFilter;
+                    child.material.map.minFilter = THREE.NearestFilter;
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            faceGroup.add(model);
+
+            const outlineGroup = gltf.scene.clone();
+            while (outlineGroup.children.length) outlineGroup.remove(outlineGroup.children[0]);
+            model.traverse(child => {
+                if (child.isMesh) {
+                    const geo = child.geometry;
+                    const mat = new THREE.MeshBasicMaterial({
+                        color: 0x000000,
+                        side: THREE.BackSide,
+                        transparent: false,
+                    });
+                    const outlineChild = new THREE.Mesh(geo, mat);
+                    outlineChild.position.copy(child.position);
+                    outlineChild.rotation.copy(child.rotation);
+                    outlineChild.scale.copy(child.scale);
+                    outlineChild.scale.multiplyScalar(1.05);
+                    outlineGroup.add(outlineChild);
+                }
+            });
+            model.add(outlineGroup);
+            outlineGroup.position.set(0, 0, 0);
+            outlineGroup.rotation.set(0, 0, 0);
+            outlineGroup.scale.set(1, 1, 1);
+            outlineMesh = outlineGroup;
+
+        }, undefined, (error) => {
+            console.warn('Model not loaded, using fallback shape');
+            const sphereGeo = new THREE.SphereGeometry(0.8, 32, 16);
+            const sphereMat = new THREE.MeshLambertMaterial({
+                color: 0x44aa88,
+                map: bgTex
+            });
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+            sphere.position.set(0, 0, 0);
+            faceGroup.add(sphere);
+
+            const outlineMat = new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                side: THREE.BackSide
+            });
+            const outlineSphere = new THREE.Mesh(sphereGeo, outlineMat);
+            outlineSphere.position.copy(sphere.position);
+            outlineSphere.scale.set(1.02, 1.02, 1.02);
+            faceGroup.add(outlineSphere);
+            mainModel = sphere;
+        });
+
+        const paveMat = new THREE.MeshLambertMaterial({
+            color: 0x8e897c,
+            map: ptex,
+            side: THREE.DoubleSide
+        });
+        const pave = new THREE.Mesh(new THREE.CircleGeometry(1.5, 40), paveMat);
+        pave.rotation.set(-Math.PI / 2, 0, 0);
+        pave.position.set(0, -0.02, 0);
+        pave.receiveShadow = true;
+        scene.add(pave);
+
+        const shdwMat = new THREE.MeshLambertMaterial({
+            color: 0x000000,
+            map: shdwtex,
+            alphaTest: 0.1,
+            transparent: true
+        });
+        const shdw = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), shdwMat);
+        shdw.rotation.set(-Math.PI / 2, 0, 0);
+        shdw.position.set(0, 0.01, 0);
+        shdw.receiveShadow = true;
+        scene.add(shdw);
+
+        const planeMat = new THREE.MeshStandardMaterial({
+            map: faceTexture,
+            transparent: true,
+            alphaTest: 0.01,
+            displacementMap: poobumpTex,
+            displacementScale: 3,
+            displacementBias: 0.04,
+            side: THREE.DoubleSide
+        });
+        planeMat.map.magFilter = THREE.NearestFilter;
+        planeMat.map.minFilter = THREE.NearestFilter;
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(3, 3, 32, 1), planeMat);
+        plane.position.set(0, 0, 0);
+        plane.rotation.set(-0.35, 0, 0);
+        faceGroup.add(plane);
+
+        let mouthFrame = 0,
+            eyeFrame = 0,
+            browsOffset = 0,
+            time = 0;
+
+        function animate() {
+            time += 0.02;
+            const mouthCycle = Math.floor((Math.sin(time * 2) * 0.5 + 0.5) * 5);
+            mouthFrame = Math.min(mouthCycle, 3);
+            eyeFrame = Math.sin(time * 1.5) > 0.8 ? 1 : 0;
+            browsOffset = Math.sin(time * 1.2) * 3;
+
+            drawFace(mouthFrame, eyeFrame, browsOffset);
+            faceTexture.needsUpdate = true;
+
+            TWEEN.update();
+
+            controls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
